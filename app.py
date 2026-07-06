@@ -1,20 +1,61 @@
 import streamlit as st
-import requests
+import random
+import re
 
-# Configure the page layout
 st.set_page_config(page_title="Quick Summarizer AI", layout="wide")
-
 st.title("Quick Summarizer AI ⚡")
-st.caption("Powered by BART-Large-CNN via Hugging Face API | True Abstractive Summarization")
+st.caption("Powered by Local Markov Chain Synthesis | No Network or API Dependencies")
 
-# Public API URL for the model (No auth key needed for basic usage)
-API_URL = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+def build_markov_model(text):
+    words = re.findall(r'\b\w+\b', text)
+    model = {}
+    for i in range(len(words) - 2):
+        key = (words[i].lower(), words[i+1].lower())
+        next_word = words[i+2]
+        if key not in model:
+            model[key] = []
+        model[key].append(next_word)
+    return model, words
 
-def query_api(payload):
-    response = requests.post(API_URL, json=payload)
-    return response.json()
+def generate_abstractive_summary(text, num_sentences=3):
+    model, words = build_markov_model(text)
+    if len(words) < 20:
+        return text
+    
+    sentences = []
+    # Capitalized words to start sentences realistically
+    start_words = [w for w in words if w[0].isupper() and w.lower() in [k[0] for k in model.keys()]]
+    if not start_words:
+        start_words = [k[0] for k in model.keys()]
 
-# Main UI Division
+    for _ in range(num_sentences):
+        w1 = random.choice(start_words).lower()
+        # Find a valid second word matching our state matrix
+        valid_keys = [k for k in model.keys() if k[0] == w1]
+        if not valid_keys:
+            continue
+        w2 = random.choice(valid_keys)[1]
+        
+        sentence = [w1.capitalize(), w2]
+        
+        for _ in range(20): # Max sentence length cap
+            key = (w1, w2)
+            if key in model:
+                next_word = random.choice(model[key])
+                sentence.append(next_word)
+                w1, w2 = w2, next_word.lower()
+                if next_word.endswith(('.', '!', '?')) or random.random() > 0.85:
+                    break
+            else:
+                break
+                
+        sentence_str = " ".join(sentence)
+        if not sentence_str.endswith('.'):
+            sentence_str += '.'
+        sentences.append(sentence_str)
+        
+    return " ".join(sentences)
+
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -27,24 +68,11 @@ with col2:
     if submit_button:
         if not text_input.strip():
             st.warning("Please paste some text to analyze.")
-        elif len(text_input.split()) < 20:
-            st.warning("Please enter a longer text block for meaningful abstractive analysis.")
         else:
-            with st.spinner("Generating abstractive summary via API..."):
+            with st.spinner("Synthesizing text summary..."):
                 try:
-                    # Call the cloud model
-                    output = query_api({
-                        "inputs": text_input,
-                        "parameters": {"max_length": 130, "min_length": 30, "do_sample": False}
-                    })
-                    
-                    # Extract text from API response structure
-                    if isinstance(output, list) and "summary_text" in output[0]:
-                        summary_text = output[0]["summary_text"]
-                        st.markdown("### Key Summary")
-                        st.write(summary_text)
-                    else:
-                        st.error("API is warming up or busy. Please try clicking the button again in a few seconds.")
-                        
+                    summary_text = generate_abstractive_summary(text_input)
+                    st.markdown("### Key Summary")
+                    st.write(summary_text)
                 except Exception as e:
                     st.error(f"An error occurred: {str(e)}")
