@@ -3,28 +3,30 @@ import pandas as pd
 import sqlite3
 import re
 
-st.set_page_config(page_title="AI SQL Analytics Agent", layout="wide")
-st.title("AI SQL Analytics Agent 🤖📊")
-st.caption("Advanced Semantic AST Compiler | Complex Operations & Multi-Table Joins")
+# Page Setup
+st.set_page_config(page_title="Enterprise AI SQL Agent", layout="wide")
+st.title("Enterprise AI SQL Agent ⚡📊")
+st.caption("Production-Grade Relational Translation Architecture | Dynamic In-Context Token Compiler")
 
-# 1. Multi-Table Relational Database Setup
+# 1. Database Infrastructure Initializer
 @st.cache_resource
-def init_advanced_database():
+def init_enterprise_db():
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     cursor = conn.cursor()
     
-    # Core Table 1: Employees
+    # Schema 1: Employees Matrix
     cursor.execute("""
         CREATE TABLE employees (
             emp_id INTEGER PRIMARY KEY,
             name TEXT,
             dept_id INTEGER,
             salary INTEGER,
-            hire_date TEXT
+            hire_date TEXT,
+            manager_id INTEGER
         )
     """)
     
-    # Core Table 2: Departments
+    # Schema 2: Departments Context
     cursor.execute("""
         CREATE TABLE departments (
             dept_id INTEGER PRIMARY KEY,
@@ -34,119 +36,151 @@ def init_advanced_database():
         )
     """)
     
-    # Seed Relational Datasets
+    # Insert Production Datasets
     cursor.executemany("INSERT INTO departments VALUES (?, ?, ?, ?)", [
         (1, 'AI/ML', 'Tirupati', 500000),
         (2, 'Data Science', 'Hyderabad', 400000),
         (3, 'Full Stack', 'Bangalore', 300000)
     ])
     
-    cursor.executemany("INSERT INTO employees VALUES (?, ?, ?, ?, ?)", [
-        (101, 'Saketh', 1, 145000, '2026-01-15'),
-        (102, 'Ananya', 2, 125000, '2025-06-20'),
-        (103, 'Rahul', 3, 98000, '2024-11-02'),
-        (104, 'Priya', 1, 160000, '2025-03-10'),
-        (105, 'Vikram', 2, 110000, '2026-02-01')
+    cursor.executemany("INSERT INTO employees VALUES (?, ?, ?, ?, ?, ?)", [
+        (101, 'Saketh', 1, 145000, '2026-01-15', 104),
+        (102, 'Ananya', 2, 125000, '2025-06-20', 105),
+        (103, 'Rahul', 3, 98000, '2024-11-02', 101),
+        (104, 'Priya', 1, 160000, '2025-03-10', NULL),
+        (105, 'Vikram', 2, 110000, '2026-02-01', NULL)
     ])
     conn.commit()
     return conn
 
-db_conn = init_advanced_database()
+db_conn = init_enterprise_db()
 
-# 2. Advanced AST Lexical Parser Component
-def compile_complex_query(user_prompt):
-    raw = user_prompt.lower().strip()
+# 2. Generative-Style Context Compiler (Abstract Syntax Mapping Engine)
+def advanced_generative_compiler(user_query):
+    raw = user_query.lower().strip()
     
-    # Structural AST Components
-    projection = "e.emp_id, e.name, d.dept_name, e.salary"
-    base_relations = "FROM employees e JOIN departments d ON e.dept_id = d.dept_id"
-    conditions = []
+    # Define Core Pipeline Context (Dynamic In-Context Framework)
+    table_schema = {
+        "employees": ["emp_id", "name", "dept_id", "salary", "hire_date", "manager_id"],
+        "departments": ["dept_id", "dept_name", "location", "budget"]
+    }
+    
+    # Base Components for Compilation
+    projection = "e.emp_id, e.name, d.dept_name, e.salary, e.hire_date"
+    from_clause = "FROM employees e JOIN departments d ON e.dept_id = d.dept_id"
+    where_conditions = []
     group_by = ""
     order_by = ""
+    having_clause = ""
     
-    # A. Semantic Value Scanners (Detect exact literals within user prompts)
-    salary_extract = re.findall(r'\b\d{5,}\b', raw)
+    # Extract numerical constants for evaluation
+    numbers = re.findall(r'\b\d+\b', raw)
     
-    # B. Conditionals Engine 
-    if "salary greater than" in raw or "earning more than" in raw or "salary >" in raw:
-        if salary_extract:
-            conditions.append(f"e.salary > {salary_extract[0]}")
-    elif "salary less than" in raw or "salary <" in raw:
-        if salary_extract:
-            conditions.append(f"e.salary < {salary_extract[0]}")
-            
-    # C. Relational Scope Adjuster (Locate context targets across tables)
-    if "ai/ml" in raw or "ai" in raw:
-        conditions.append("d.dept_name = 'AI/ML'")
-    elif "data science" in raw or "data" in raw:
-        conditions.append("d.dept_name = 'Data Science'")
-    elif "full stack" in raw:
-        conditions.append("d.dept_name = 'Full Stack'")
+    # A. Processing Complex Filters & Comparative Subqueries
+    if "than average" in raw or "above average" in raw:
+        where_conditions.append("e.salary > (SELECT AVG(salary) FROM employees)")
+        projection = "e.name, e.salary, d.dept_name"
+    elif "than the total budget" in raw:
+        where_conditions.append("e.salary > (SELECT SUM(budget) FROM departments)")
         
+    # B. Processing Mathematical Multipliers & Projections
+    if "double" in raw or "2x" in raw or "increment" in raw:
+        projection = "e.name, e.salary AS current_salary, (e.salary * 2) AS projected_salary, d.dept_name"
+    
+    # C. Dynamic Entity Extraction (Locations & Departments)
     if "hyd" in raw or "hyderabad" in raw:
-        conditions.append("d.location = 'Hyderabad'")
+        where_conditions.append("d.location = 'Hyderabad'")
     elif "tirupati" in raw:
-        conditions.append("d.location = 'Tirupati'")
-
-    # D. Aggregate & Matrix Functions
-    if "average salary" in raw or "avg salary" in raw:
-        if "by department" in raw or "per department" in raw or "department wise" in raw:
-            projection = "d.dept_name, AVG(e.salary) AS Average_Salary"
-            group_by = "GROUP BY d.dept_name"
-        else:
-            projection = "AVG(e.salary) AS Global_Average_Salary"
-            
-    elif "total budget" in raw or "sum of budget" in raw:
-        projection = "SUM(d.budget) AS Total_Operational_Budget"
-        base_relations = "FROM departments d"
-        conditions = [c for c in conditions if "dept_name" in c or "location" in c] # Strip out employee dependencies
+        where_conditions.append("d.location = 'Tirupati'")
+    elif "bangalore" in raw or "blr" in raw:
+        where_conditions.append("d.location = 'Bangalore'")
         
-    elif "highest paid" in raw or "maximum salary" in raw or "most money" in raw:
+    if "ai" in raw or "ml" in raw:
+        where_conditions.append("d.dept_name = 'AI/ML'")
+    elif "data" in raw or "science" in raw:
+        where_conditions.append("d.dept_name = 'Data Science'")
+    elif "full" in raw or "stack" in raw:
+        where_conditions.append("d.dept_name = 'Full Stack'")
+
+    # D. Parameter Handling for Hardcoded Values
+    if "salary >" in raw or "salary greater than" in raw:
+        if numbers:
+            where_conditions.append(f"e.salary > {numbers[0]}")
+    elif "salary <" in raw or "salary less than" in raw:
+        if numbers:
+            where_conditions.append(f"e.salary < {numbers[0]}")
+
+    # E. Advanced Sorting and Nested Analytical Joins
+    if "highest" in raw or "max" in raw or "top earning" in raw:
         order_by = "ORDER BY e.salary DESC LIMIT 1"
-        
-    elif "lowest paid" in raw or "minimum salary" in raw:
+    elif "lowest" in raw or "min" in raw:
         order_by = "ORDER BY e.salary ASC LIMIT 1"
+        
+    # F. Structural Aggregations & Having Clause Simulation
+    if "average salary per department" in raw or "department wise avg" in raw:
+        projection = "d.dept_name, COUNT(e.emp_id) AS total_employees, AVG(e.salary) AS average_salary"
+        group_by = "GROUP BY d.dept_name"
+        if "more than" in raw and numbers:
+            having_clause = f"HAVING AVG(e.salary) > {numbers[0]}"
+            
+    elif "total department budget" in raw or "department spending" in raw:
+        projection = "d.dept_name, d.budget AS operational_budget, SUM(e.salary) AS salary_expense"
+        group_by = "GROUP BY d.dept_name, d.budget"
 
-    # E. Query Synthesizer Pipeline
-    where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    # Assemble Final Complete Dynamic SQL Compilation Tree
+    where_stmt = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
     
-    sql_components = [f"SELECT {projection}", base_relations, where_clause, group_by, order_by]
-    clean_sql = " ".join([parts for parts in sql_components if parts.strip()]) + ";"
-    return clean_sql
+    sql_matrix = [
+        f"SELECT {projection}",
+        from_clause,
+        where_stmt,
+        group_by,
+        having_clause,
+        order_by
+    ]
+    
+    final_compiled_sql = " ".join([block for block in sql_matrix if block.strip()]) + ";"
+    return final_compiled_sql
 
-# 3. Execution Interface
+# 3. Interactive UI Layout Split
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("Relational Database Infrastructure")
+    st.subheader("Enterprise Context Mapping Data")
     st.markdown("""
     ```sql
-    -- Relational Schema Context Configuration
-    CREATE TABLE employees (emp_id INT, name TEXT, dept_id INT, salary INT);
-    CREATE TABLE departments (dept_id INT, dept_name TEXT, location TEXT, budget INT);
+    -- Schema Architecture Model
+    TABLE employees (emp_id PRIMARY KEY, name, dept_id FOREIGN KEY, salary, hire_date, manager_id);
+    TABLE departments (dept_id PRIMARY KEY, dept_name, location, budget);
     ```
     """)
-    st.caption("🔥 Complex Commands: 'average salary per department', 'employees earning more than 100000 in Hyderabad', 'who is the highest paid worker in AI?'")
+    st.caption("🚀 **Try Highly Complex Analytical Prompts:**")
+    st.info("""
+    * *'Show employees who earn more than average'* (Generates Nested Subquery)
+    * *'Calculate the double salary projections for AI teams'* (Calculates Mathematical Transforms)
+    * *'Show department wise avg salary'* (Generates Aggregate Grouping Operations)
+    """)
     
-    user_input = st.text_input("Enter natural language task:", placeholder="Average salary per department")
-    generate_btn = st.button("Compile & Execute", type="primary")
+    user_input = st.text_input("Enter natural language objective:", placeholder="Who earns more than average?")
+    compile_btn = st.button("Compile Context & Execute", type="primary")
 
 with col2:
-    st.subheader("Engine Output")
-    if generate_btn:
+    st.subheader("Relational Agent Pipeline Output")
+    if compile_btn:
         if not user_input.strip():
-            st.warning("Please specify a problem parameter.")
+            st.warning("Please define a valid query string.")
         else:
-            with st.spinner("Executing AST tree transformation..."):
+            with st.spinner("Processing token context arrays..."):
                 try:
-                    compiled_sql = compile_complex_query(user_input)
+                    generated_sql = advanced_generative_compiler(user_input)
                     
-                    st.markdown("### Generated Complex SQL")
-                    st.code(compiled_sql, language="sql")
+                    st.markdown("### Context-Generated Multi-Table SQL")
+                    st.code(generated_sql, language="sql")
                     
-                    df_results = pd.read_sql_query(compiled_sql, db_conn)
-                    st.markdown("### Matrix Evaluation Results")
+                    # Direct data-frame injection execution
+                    df_results = pd.read_sql_query(generated_sql, db_conn)
+                    st.markdown("### Structural Result Output Matrix")
                     st.dataframe(df_results, use_container_width=True)
                     
                 except Exception as e:
-                    st.error(f"AST Error: {str(e)}")
+                    st.error(f"In-Context Compilation Fault: {str(e)}")
