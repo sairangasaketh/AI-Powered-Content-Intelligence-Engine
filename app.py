@@ -4,183 +4,131 @@ import sqlite3
 import re
 
 # Page Setup
-st.set_page_config(page_title="Enterprise AI SQL Agent", layout="wide")
-st.title("Enterprise AI SQL Agent ⚡📊")
-st.caption("Production-Grade Relational Translation Architecture | Dynamic In-Context Token Compiler")
+st.set_page_config(page_title="Dynamic AI SQL Agent", layout="wide")
+st.title("Dynamic AI SQL Agent 🤖📊")
+st.caption("Upload Any Table -> Ask in English -> Generate SQL & Query Live Data")
 
-# 1. Database Infrastructure Initializer
+# Initialize a persistent in-memory database connection
 @st.cache_resource
-def init_enterprise_db():
-    conn = sqlite3.connect(":memory:", check_same_thread=False)
-    cursor = conn.cursor()
-    
-    # Schema 1: Employees Matrix
-    cursor.execute("""
-        CREATE TABLE employees (
-            emp_id INTEGER PRIMARY KEY,
-            name TEXT,
-            dept_id INTEGER,
-            salary INTEGER,
-            hire_date TEXT,
-            manager_id INTEGER
-        )
-    """)
-    
-    # Schema 2: Departments Context
-    cursor.execute("""
-        CREATE TABLE departments (
-            dept_id INTEGER PRIMARY KEY,
-            dept_name TEXT,
-            location TEXT,
-            budget INTEGER
-        )
-    """)
-    
-    # Insert Production Datasets
-    cursor.executemany("INSERT INTO departments VALUES (?, ?, ?, ?)", [
-        (1, 'AI/ML', 'Tirupati', 500000),
-        (2, 'Data Science', 'Hyderabad', 400000),
-        (3, 'Full Stack', 'Bangalore', 300000)
-    ])
-    
-    cursor.executemany("INSERT INTO employees VALUES (?, ?, ?, ?, ?, ?)", [
-        (101, 'Saketh', 1, 145000, '2026-01-15', 104),
-        (102, 'Ananya', 2, 125000, '2025-06-20', 105),
-        (103, 'Rahul', 3, 98000, '2024-11-02', 101),
-        (104, 'Priya', 1, 160000, '2025-03-10', None),  # Changed NULL to None
-        (105, 'Vikram', 2, 110000, '2026-02-01', None)   # Changed NULL to None
-    ])
-    conn.commit()
-    return conn
+def get_db_connection():
+    return sqlite3.connect(":memory:", check_same_thread=False)
 
-db_conn = init_enterprise_db()
+conn = get_db_connection()
 
-# 2. Generative-Style Context Compiler (Abstract Syntax Mapping Engine)
-def advanced_generative_compiler(user_query):
-    raw = user_query.lower().strip()
+# --- STEP 1: DYNAMIC FILE UPLOAD ---
+st.subheader("📁 Step 1: Upload Your Dataset")
+uploaded_file = st.file_uploader("Upload a CSV file to query", type=["csv"])
+
+if uploaded_file is not None:
+    # Read the dataset and clean column names for safe SQL execution
+    df = pd.read_csv(uploaded_file)
+    df.columns = [re.sub(r'\W+', '_', col.strip().lower()) for col in df.columns]
     
-    # Define Core Pipeline Context (Dynamic In-Context Framework)
-    table_schema = {
-        "employees": ["emp_id", "name", "dept_id", "salary", "hire_date", "manager_id"],
-        "departments": ["dept_id", "dept_name", "location", "budget"]
-    }
+    # Deriving table name from filename
+    table_name = re.sub(r'\W+', '_', uploaded_file.name.split('.')[0].lower())
     
-    # Base Components for Compilation
-    projection = "e.emp_id, e.name, d.dept_name, e.salary, e.hire_date"
-    from_clause = "FROM employees e JOIN departments d ON e.dept_id = d.dept_id"
-    where_conditions = []
-    group_by = ""
-    order_by = ""
-    having_clause = ""
+    # Save the dataframe to our in-memory SQLite database
+    df.to_sql(table_name, conn, if_exists="replace", index=False)
     
-    # Extract numerical constants for evaluation
-    numbers = re.findall(r'\b\d+\b', raw)
+    # Display the dynamic table data preview
+    st.success(f"Successfully loaded table **'{table_name}'** with {len(df)} records!")
+    st.markdown("### Live Table Preview")
+    st.dataframe(df.head(5), use_container_width=True, hide_index=True)
     
-    # A. Processing Complex Filters & Comparative Subqueries
-    if "than average" in raw or "above average" in raw:
-        where_conditions.append("e.salary > (SELECT AVG(salary) FROM employees)")
-        projection = "e.name, e.salary, d.dept_name"
-    elif "than the total budget" in raw:
-        where_conditions.append("e.salary > (SELECT SUM(budget) FROM departments)")
+    st.markdown("---")
+    
+    # --- STEP 2: DYNAMIC INTENT MAPPING ---
+    # Fetch available numerical and text columns on the fly
+    all_columns = list(df.columns)
+    numeric_cols = list(df.select_dtypes(include=['number']).columns)
+    text_cols = list(df.select_dtypes(include=['object']).columns)
+    
+    def dynamic_sql_compiler(user_query, table, cols, num_cols, txt_cols):
+        raw = user_query.lower().strip()
         
-    # B. Processing Mathematical Multipliers & Projections
-    if "double" in raw or "2x" in raw or "increment" in raw:
-        projection = "e.name, e.salary AS current_salary, (e.salary * 2) AS projected_salary, d.dept_name"
-    
-    # C. Dynamic Entity Extraction (Locations & Departments)
-    if "hyd" in raw or "hyderabad" in raw:
-        where_conditions.append("d.location = 'Hyderabad'")
-    elif "tirupati" in raw:
-        where_conditions.append("d.location = 'Tirupati'")
-    elif "bangalore" in raw or "blr" in raw:
-        where_conditions.append("d.location = 'Bangalore'")
+        # Fallback default configuration
+        projection = "*"
+        where_conditions = []
+        order_by = ""
+        group_by = ""
         
-    if "ai" in raw or "ml" in raw:
-        where_conditions.append("d.dept_name = 'AI/ML'")
-    elif "data" in raw or "science" in raw:
-        where_conditions.append("d.dept_name = 'Data Science'")
-    elif "full" in raw or "stack" in raw:
-        where_conditions.append("d.dept_name = 'Full Stack'")
-
-    # D. Parameter Handling for Hardcoded Values
-    if "salary >" in raw or "salary greater than" in raw:
-        if numbers:
-            where_conditions.append(f"e.salary > {numbers[0]}")
-    elif "salary <" in raw or "salary less than" in raw:
-        if numbers:
-            where_conditions.append(f"e.salary < {numbers[0]}")
-
-    # E. Advanced Sorting and Nested Analytical Joins
-    if "highest" in raw or "max" in raw or "top earning" in raw:
-        order_by = "ORDER BY e.salary DESC LIMIT 1"
-    elif "lowest" in raw or "min" in raw:
-        order_by = "ORDER BY e.salary ASC LIMIT 1"
+        # Dynamically discover which column the user might be referring to
+        target_num_col = num_cols[0] if num_cols else "*"
+        target_txt_col = txt_cols[0] if txt_cols else "*"
         
-    # F. Structural Aggregations & Having Clause Simulation
-    if "average salary per department" in raw or "department wise avg" in raw:
-        projection = "d.dept_name, COUNT(e.emp_id) AS total_employees, AVG(e.salary) AS average_salary"
-        group_by = "GROUP BY d.dept_name"
-        if "more than" in raw and numbers:
-            having_clause = f"HAVING AVG(e.salary) > {numbers[0]}"
-            
-    elif "total department budget" in raw or "department spending" in raw:
-        projection = "d.dept_name, d.budget AS operational_budget, SUM(e.salary) AS salary_expense"
-        group_by = "GROUP BY d.dept_name, d.budget"
+        # Scrape columns mentioned explicitly in the query text
+        for c in cols:
+            if c in raw:
+                if c in num_cols:
+                    target_num_col = c
+                if c in txt_cols:
+                    target_txt_col = c
 
-    # Assemble Final Complete Dynamic SQL Compilation Tree
-    where_stmt = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
+        # Dynamic Intent Analyzer
+        if "highest" in raw or "max" in raw or "top" in raw:
+            if target_num_col != "*":
+                order_by = f"ORDER BY {target_num_col} DESC LIMIT 1"
+        elif "lowest" in raw or "min" in raw:
+            if target_num_col != "*":
+                order_by = f"ORDER BY {target_num_col} ASC LIMIT 1"
+        elif "average" in raw or "avg" in raw:
+            if target_num_col != "*":
+                projection = f"AVG({target_num_col}) AS average_{target_num_col}"
+        elif "total" in raw or "sum" in raw:
+            if target_num_col != "*":
+                projection = f"SUM({target_num_col}) AS total_{target_num_col}"
+        elif "count" in raw or "how many" in raw:
+            projection = "COUNT(*) AS total_records"
+            if "by" in raw or "group by" in raw:
+                if target_txt_col != "*":
+                    projection = f"{target_txt_col}, COUNT(*) AS count"
+                    group_by = f"GROUP BY {target_txt_col}"
+
+        # Extract values for conditional matching (e.g., matching text labels or numeric parameters)
+        numbers = re.findall(r'\b\d+\b', raw)
+        if numbers and target_num_col != "*":
+            if ">" in raw or "greater" in raw or "more than" in raw:
+                where_conditions.append(f"{target_num_col} > {numbers[0]}")
+            elif "<" in raw or "less" in raw or "under" in raw:
+                where_conditions.append(f"{target_num_col} < {numbers[0]}")
+
+        # Construct final executable structure dynamically
+        where_stmt = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
+        sql_blocks = [f"SELECT {projection}", f"FROM {table}", where_stmt, group_by, order_by]
+        
+        return " ".join([b for b in sql_blocks if b.strip()]) + ";"
+
+    # --- STEP 3: USER QUERY INTERFACE ---
+    col1, col2 = st.columns([1, 1])
     
-    sql_matrix = [
-        f"SELECT {projection}",
-        from_clause,
-        where_stmt,
-        group_by,
-        having_clause,
-        order_by
-    ]
-    
-    final_compiled_sql = " ".join([block for block in sql_matrix if block.strip()]) + ";"
-    return final_compiled_sql
+    with col1:
+        st.subheader("Ask Questions in English")
+        st.markdown(f"**Detected Columns:** {', '.join(all_columns)}")
+        st.caption("💡 Your intent engine dynamically detects column data types and generates accurate SQL structures.")
+        
+        user_input = st.text_input("What would you like to analyze from this dataset?", placeholder="e.g., Show the record with the highest value")
+        execute_btn = st.button("Compile & Execute", type="primary")
 
-# 3. Interactive UI Layout Split
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    st.subheader("Enterprise Context Mapping Data")
-    st.markdown("""
-    ```sql
-    -- Schema Architecture Model
-    TABLE employees (emp_id PRIMARY KEY, name, dept_id FOREIGN KEY, salary, hire_date, manager_id);
-    TABLE departments (dept_id PRIMARY KEY, dept_name, location, budget);
-    ```
-    """)
-    st.caption("🚀 **Try Highly Complex Analytical Prompts:**")
-    st.info("""
-    * *'Show employees who earn more than average'* (Generates Nested Subquery)
-    * *'Calculate the double salary projections for AI teams'* (Calculates Mathematical Transforms)
-    * *'Show department wise avg salary'* (Generates Aggregate Grouping Operations)
-    """)
-    
-    user_input = st.text_input("Enter natural language objective:", placeholder="Who earns more than average?")
-    compile_btn = st.button("Compile Context & Execute", type="primary")
-
-with col2:
-    st.subheader("Relational Agent Pipeline Output")
-    if compile_btn:
-        if not user_input.strip():
-            st.warning("Please define a valid query string.")
-        else:
-            with st.spinner("Processing token context arrays..."):
-                try:
-                    generated_sql = advanced_generative_compiler(user_input)
-                    
-                    st.markdown("### Context-Generated Multi-Table SQL")
-                    st.code(generated_sql, language="sql")
-                    
-                    # Direct data-frame injection execution
-                    df_results = pd.read_sql_query(generated_sql, db_conn)
-                    st.markdown("### Structural Result Output Matrix")
-                    st.dataframe(df_results, use_container_width=True)
-                    
-                except Exception as e:
-                    st.error(f"In-Context Compilation Fault: {str(e)}")
+    with col2:
+        st.subheader("Relational Compilation Output")
+        if execute_btn:
+            if not user_input.strip():
+                st.warning("Please type an evaluation parameter or prompt.")
+            else:
+                with st.spinner("Analyzing upload schema parameters..."):
+                    try:
+                        # Compile query based on dynamically generated file constraints
+                        generated_sql = dynamic_sql_compiler(user_input, table_name, all_columns, numeric_cols, text_cols)
+                        
+                        st.markdown("### Context-Generated SQL")
+                        st.code(generated_sql, language="sql")
+                        
+                        # Fetch and serve database data matrix
+                        result_df = pd.read_sql_query(generated_sql, conn)
+                        st.markdown("### Query Results Table")
+                        st.dataframe(result_df, use_container_width=True)
+                        
+                    except Exception as e:
+                        st.error(f"Execution Error: {str(e)}")
+else:
+    st.info("💡 Please upload a CSV file above to launch the interactive dynamic database agent pipeline.")
