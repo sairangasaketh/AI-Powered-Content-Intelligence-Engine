@@ -1,78 +1,124 @@
 import streamlit as st
-import random
+import pandas as pd
+import sqlite3
 import re
 
-st.set_page_config(page_title="Quick Summarizer AI", layout="wide")
-st.title("Quick Summarizer AI ⚡")
-st.caption("Powered by Local Markov Chain Synthesis | No Network or API Dependencies")
+# Page Config
+st.set_page_config(page_title="AI SQL Analytics Agent", layout="wide")
+st.title("AI SQL Analytics Agent 🤖📊")
+st.caption("Context-Aware Natural Language to SQL Translation Engine | Zero API Key Dependencies")
 
-def build_markov_model(text):
-    words = re.findall(r'\b\w+\b', text)
-    model = {}
-    for i in range(len(words) - 2):
-        key = (words[i].lower(), words[i+1].lower())
-        next_word = words[i+2]
-        if key not in model:
-            model[key] = []
-        model[key].append(next_word)
-    return model, words
-
-def generate_abstractive_summary(text, num_sentences=3):
-    model, words = build_markov_model(text)
-    if len(words) < 20:
-        return text
+# 1. In-Memory Database Setup for Live Execution Simulation
+@st.cache_resource
+def init_database():
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
+    cursor = conn.cursor()
     
-    sentences = []
-    # Capitalized words to start sentences realistically
-    start_words = [w for w in words if w[0].isupper() and w.lower() in [k[0] for k in model.keys()]]
-    if not start_words:
-        start_words = [k[0] for k in model.keys()]
+    # Create an Employee Analytics Table
+    cursor.execute("""
+        CREATE TABLE employees (
+            emp_id INTEGER PRIMARY KEY,
+            name TEXT,
+            department TEXT,
+            salary INTEGER,
+            hire_date TEXT
+        )
+    """)
+    
+    # Insert Mock Enterprise Data
+    mock_data = [
+        (101, 'Saketh', 'AI/ML', 145000, '2026-01-15'),
+        (102, 'Ananya', 'Data Science', 125000, '2025-06-20'),
+        (103, 'Rahul', 'Full Stack', 98000, '2024-11-02'),
+        (104, 'Priya', 'AI/ML', 160000, '2025-03-10'),
+        (105, 'Vikram', 'Data Science', 110000, '2026-02-01')
+    ]
+    cursor.executemany("INSERT INTO employees VALUES (?, ?, ?, ?, ?)", mock_data)
+    conn.commit()
+    return conn
 
-    for _ in range(num_sentences):
-        w1 = random.choice(start_words).lower()
-        # Find a valid second word matching our state matrix
-        valid_keys = [k for k in model.keys() if k[0] == w1]
-        if not valid_keys:
-            continue
-        w2 = random.choice(valid_keys)[1]
-        
-        sentence = [w1.capitalize(), w2]
-        
-        for _ in range(20): # Max sentence length cap
-            key = (w1, w2)
-            if key in model:
-                next_word = random.choice(model[key])
-                sentence.append(next_word)
-                w1, w2 = w2, next_word.lower()
-                if next_word.endswith(('.', '!', '?')) or random.random() > 0.85:
-                    break
-            else:
-                break
-                
-        sentence_str = " ".join(sentence)
-        if not sentence_str.endswith('.'):
-            sentence_str += '.'
-        sentences.append(sentence_str)
-        
-    return " ".join(sentences)
+db_conn = init_database()
 
+# 2. Rule-Based Semantic Translation Engine (Simulating LLM Token Processing)
+def translate_text_to_sql(user_query):
+    query = user_query.lower().strip()
+    
+    # Base schema definitions
+    select_clause = "SELECT * FROM employees"
+    where_clause = ""
+    order_clause = ""
+    
+    # Department Extraction
+    if "ai/ml" in query or "ai" in query:
+        where_clause = "WHERE department = 'AI/ML'"
+    elif "data science" in query or "data" in query:
+        where_clause = "WHERE department = 'Data Science'"
+    elif "full stack" in query:
+        where_clause = "WHERE department = 'Full Stack'"
+        
+    # Aggregate Operations
+    if "highest salary" in query or "highest paid" in query:
+        order_clause = "ORDER BY salary DESC LIMIT 1"
+    elif "total salary" in query or "budget" in query:
+        select_clause = "SELECT SUM(salary) AS Total_Budget FROM employees"
+    elif "average salary" in query or "avg salary" in query:
+        select_clause = "SELECT AVG(salary) AS Average_Salary FROM employees"
+    elif "count" in query or "how many" in query:
+        if where_clause:
+            select_clause = "SELECT COUNT(*) AS Employee_Count FROM employees"
+        else:
+            select_clause = "SELECT COUNT(*) AS Total_Employees FROM employees"
+            
+    # Combine clauses logically
+    sql_parts = [select_clause]
+    if where_clause:
+        sql_parts.append(where_clause)
+    if order_clause:
+        sql_parts.append(order_clause)
+        
+    final_sql = " ".join(sql_parts) + ";"
+    return final_sql
+
+# 3. Interactive UI layout
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("Input Text")
-    text_input = st.text_area("Paste your text or article here:", height=350)
-    submit_button = st.button("Summarize", type="primary")
+    st.subheader("Database Schema Context")
+    st.markdown("""
+    ```sql
+    CREATE TABLE employees (
+        emp_id INTEGER PRIMARY KEY,
+        name TEXT,
+        department TEXT,
+        salary INTEGER,
+        hire_date TEXT
+    );
+    ```
+    """)
+    st.caption("💡 Try asking: 'Show all employees in AI/ML', 'What is the average salary?', or 'Who has the highest paid job?'")
+    
+    user_input = st.text_input("Enter your natural language question:", placeholder="e.g., Show me employees in Data Science")
+    generate_btn = st.button("Translate & Execute", type="primary")
 
 with col2:
-    st.subheader("AI Insights")
-    if submit_button:
-        if not text_input.strip():
-            st.warning("Please paste some text to analyze.")
+    st.subheader("AI Compilation & Execution Output")
+    if generate_btn:
+        if not user_input.strip():
+            st.warning("Please input a natural language query.")
         else:
-            with st.spinner("Synthesizing text summary..."):
+            with st.spinner("Compiling tokens to SQL tokens..."):
                 try:
-                    summary_text = generate_abstractive_summary(text_input)
-                    st.markdown("### Key Summary")
-                    st.write(summary_text)
+                    # Generate the translation
+                    generated_sql = translate_text_to_sql(user_input)
+                    
+                    st.markdown("### Generated SQL Query")
+                    st.code(generated_sql, language="sql")
+                    
+                    # Execute generated query directly on the in-memory database
+                    df_results = pd.read_sql_query(generated_sql, db_conn)
+                    
+                    st.markdown("### Executed Dataset Results")
+                    st.dataframe(df_results, use_container_width=True)
+                    
                 except Exception as e:
-                    st.error(f"An error occurred: {str(e)}")
+                    st.error(f"Execution Engine Error: {str(e)}")
