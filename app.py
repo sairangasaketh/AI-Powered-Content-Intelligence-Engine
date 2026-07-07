@@ -47,8 +47,8 @@ def init_enterprise_db():
         (101, 'Saketh', 1, 145000, '2026-01-15', 104),
         (102, 'Ananya', 2, 125000, '2025-06-20', 105),
         (103, 'Rahul', 3, 98000, '2024-11-02', 101),
-        (104, 'Priya', 1, 160000, '2025-03-10', NULL),
-        (105, 'Vikram', 2, 110000, '2026-02-01', NULL)
+        (104, 'Priya', 1, 160000, '2025-03-10', None),  # Changed NULL to None
+        (105, 'Vikram', 2, 110000, '2026-02-01', None)   # Changed NULL to None
     ])
     conn.commit()
     return conn
