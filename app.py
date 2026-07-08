@@ -1,134 +1,141 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-import re
+from crewai import Agent, Task, Crew, Process
+from langchain_community.llms import Ollama
 
-# Page Setup
-st.set_page_config(page_title="Dynamic AI SQL Agent", layout="wide")
-st.title("Dynamic AI SQL Agent 🤖📊")
-st.caption("Upload Any Table -> Ask in English -> Generate SQL & Query Live Data")
+# 1. Page Configuration
+st.set_page_config(page_title="Agentic Data Intelligence Network", layout="wide")
+st.title("Autonomous Multi-Agent Data Intelligence Network 🤖📊")
+st.caption("Powered by Local LLM Orchestration & Self-Healing Critic Loops")
 
-# Initialize a persistent in-memory database connection
+# 2. Local Relational Database Initialization
 @st.cache_resource
-def get_db_connection():
-    return sqlite3.connect(":memory:", check_same_thread=False)
-
-conn = get_db_connection()
-
-# --- STEP 1: DYNAMIC FILE UPLOAD ---
-st.subheader("📁 Step 1: Upload Your Dataset")
-uploaded_file = st.file_uploader("Upload a CSV file to query", type=["csv"])
-
-if uploaded_file is not None:
-    # Read the dataset and clean column names for safe SQL execution
-    df = pd.read_csv(uploaded_file)
-    df.columns = [re.sub(r'\W+', '_', col.strip().lower()) for col in df.columns]
+def init_portfolio_db():
+    conn = sqlite3.connect("crop_intelligence.db", check_same_thread=False)
+    cursor = conn.cursor()
     
-    # Deriving table name from filename
-    table_name = re.sub(r'\W+', '_', uploaded_file.name.split('.')[0].lower())
+    # Structural Crop Production Matrix Schema
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS crop_yields (
+            record_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            crop_name TEXT,
+            region TEXT,
+            rainfall_required INTEGER,
+            fertilizer_used TEXT,
+            yield_mt INTEGER
+        )
+    """)
     
-    # Save the dataframe to our in-memory SQLite database
-    df.to_sql(table_name, conn, if_exists="replace", index=False)
-    
-    # Display the dynamic table data preview
-    st.success(f"Successfully loaded table **'{table_name}'** with {len(df)} records!")
-    st.markdown("### Live Table Preview")
-    st.dataframe(df.head(5), use_container_width=True, hide_index=True)
-    
-    st.markdown("---")
-    
-    # --- STEP 2: DYNAMIC INTENT MAPPING ---
-    # Fetch available numerical and text columns on the fly
-    all_columns = list(df.columns)
-    numeric_cols = list(df.select_dtypes(include=['number']).columns)
-    text_cols = list(df.select_dtypes(include=['object']).columns)
-    
-    def dynamic_sql_compiler(user_query, table, cols, num_cols, txt_cols):
-        raw = user_query.lower().strip()
-        
-        # Fallback default configuration
-        projection = "*"
-        where_conditions = []
-        order_by = ""
-        group_by = ""
-        
-        # Dynamically discover which column the user might be referring to
-        target_num_col = num_cols[0] if num_cols else "*"
-        target_txt_col = txt_cols[0] if txt_cols else "*"
-        
-        # Scrape columns mentioned explicitly in the query text
-        for c in cols:
-            if c in raw:
-                if c in num_cols:
-                    target_num_col = c
-                if c in txt_cols:
-                    target_txt_col = c
+    # Populate mock analytics data if table is completely fresh
+    cursor.execute("SELECT COUNT(*) FROM crop_yields")
+    if cursor.fetchone()[0] == 0:
+        mock_data = [
+            ('Wheat', 'North', 80, 'Yes', 4500),
+            ('Rice', 'South', 200, 'Yes', 6200),
+            ('Maize', 'West', 120, 'No', 3100),
+            ('Barley', 'North', 90, 'No', 2800),
+            ('Sugarcane', 'East', 250, 'Yes', 8900)
+        ]
+        cursor.executemany("INSERT INTO crop_yields (crop_name, region, rainfall_required, fertilizer_used, yield_mt) VALUES (?, ?, ?, ?, ?)", mock_data)
+        conn.commit()
+    return conn
 
-        # Dynamic Intent Analyzer
-        if "highest" in raw or "max" in raw or "top" in raw:
-            if target_num_col != "*":
-                order_by = f"ORDER BY {target_num_col} DESC LIMIT 1"
-        elif "lowest" in raw or "min" in raw:
-            if target_num_col != "*":
-                order_by = f"ORDER BY {target_num_col} ASC LIMIT 1"
-        elif "average" in raw or "avg" in raw:
-            if target_num_col != "*":
-                projection = f"AVG({target_num_col}) AS average_{target_num_col}"
-        elif "total" in raw or "sum" in raw:
-            if target_num_col != "*":
-                projection = f"SUM({target_num_col}) AS total_{target_num_col}"
-        elif "count" in raw or "how many" in raw:
-            projection = "COUNT(*) AS total_records"
-            if "by" in raw or "group by" in raw:
-                if target_txt_col != "*":
-                    projection = f"{target_txt_col}, COUNT(*) AS count"
-                    group_by = f"GROUP BY {target_txt_col}"
+db_conn = init_portfolio_db()
 
-        # Extract values for conditional matching (e.g., matching text labels or numeric parameters)
-        numbers = re.findall(r'\b\d+\b', raw)
-        if numbers and target_num_col != "*":
-            if ">" in raw or "greater" in raw or "more than" in raw:
-                where_conditions.append(f"{target_num_col} > {numbers[0]}")
-            elif "<" in raw or "less" in raw or "under" in raw:
-                where_conditions.append(f"{target_num_col} < {numbers[0]}")
+# Display active database structural baseline parameters to user
+st.subheader("📋 Underlying Enterprise Database Context")
+df_preview = pd.read_sql_query("SELECT * FROM crop_yields", db_conn)
+st.dataframe(df_preview, use_container_width=True, hide_index=True)
+st.markdown("---")
 
-        # Construct final executable structure dynamically
-        where_stmt = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
-        sql_blocks = [f"SELECT {projection}", f"FROM {table}", where_stmt, group_by, order_by]
-        
-        return " ".join([b for b in sql_blocks if b.strip()]) + ";"
-
-    # --- STEP 3: USER QUERY INTERFACE ---
-    col1, col2 = st.columns([1, 1])
+# 3. Native Agentic Orchestration Layer
+def run_agentic_pipeline(user_prompt):
+    # Connect directly to local open-source model running via Ollama framework
+    local_llm = Ollama(model="llama3")
     
-    with col1:
-        st.subheader("Ask Questions in English")
-        st.markdown(f"**Detected Columns:** {', '.join(all_columns)}")
-        st.caption("💡 Your intent engine dynamically detects column data types and generates accurate SQL structures.")
-        
-        user_input = st.text_input("What would you like to analyze from this dataset?", placeholder="e.g., Show the record with the highest value")
-        execute_btn = st.button("Compile & Execute", type="primary")
+    # Structural DB Schema instructions injected into Agent Context
+    db_schema_context = """
+    Table Name: crop_yields
+    Columns:
+    - crop_name (TEXT)
+    - region (TEXT)
+    - rainfall_required (INTEGER)
+    - fertilizer_used (TEXT)
+    - yield_mt (INTEGER)
+    """
 
-    with col2:
-        st.subheader("Relational Compilation Output")
-        if execute_btn:
-            if not user_input.strip():
-                st.warning("Please type an evaluation parameter or prompt.")
-            else:
-                with st.spinner("Analyzing upload schema parameters..."):
-                    try:
-                        # Compile query based on dynamically generated file constraints
-                        generated_sql = dynamic_sql_compiler(user_input, table_name, all_columns, numeric_cols, text_cols)
-                        
-                        st.markdown("### Context-Generated SQL")
-                        st.code(generated_sql, language="sql")
-                        
-                        # Fetch and serve database data matrix
-                        result_df = pd.read_sql_query(generated_sql, conn)
-                        st.markdown("### Query Results Table")
-                        st.dataframe(result_df, use_container_width=True)
-                        
-                    except Exception as e:
-                        st.error(f"Execution Error: {str(e)}")
-else:
-    st.info("💡 Please upload a CSV file above to launch the interactive dynamic database agent pipeline.")
+    # Agent 1: The Expert SQL Database Engineer
+    sql_developer = Agent(
+        role="Senior SQL Developer",
+        goal="Translate plain English requests into highly optimized, valid SQLite syntax.",
+        backstory="You are an expert database administrator. You strictly write clean SQL queries based on provided schemas, wrapping queries inside clear ```sql tags.",
+        verbose=True,
+        llm=local_llm
+    )
+
+    # Agent 2: The Critical Data Analyst & Error Validator
+    data_critic = Agent(
+        role="Data Integrity Critic",
+        goal="Analyze generated SQL queries for accuracy, syntax faults, or performance regressions.",
+        backstory="You audit code. You review the SQL generated by the developer, cross-reference it with the schema, and either approve it or specify modifications to avoid runtime database evaluation crashes.",
+        verbose=True,
+        llm=local_llm
+    )
+
+    # Define Sequence Tasks
+    task_write_sql = Task(
+        description=f"Convert this prompt: '{user_prompt}' into a SQL query. Database Schema Context:\n{db_schema_context}",
+        expected_output="A single valid SQLite string wrapped strictly in ```sql ... ``` code blocks.",
+        agent=sql_developer
+    )
+
+    task_audit_sql = Task(
+        description="Verify the generated SQL query for structural flaws or syntax errors against the schema rules.",
+        expected_output="The finalized, verified clean SQL statement ready for live database execution.",
+        agent=data_critic
+    )
+
+    # Spin up the Crew Engine Team
+    analysis_crew = Crew(
+        agents=[sql_developer, data_critic],
+        tasks=[task_write_sql, task_audit_sql],
+        process=Process.sequential
+    )
+
+    raw_output = analysis_crew.kickoff()
+    
+    # Extract clean SQL string using regular expression parser
+    sql_match = re.search(r"```sql\n(.*?)```", raw_output, re.DOTALL)
+    executable_sql = sql_match.group(1).strip() if sql_match else str(raw_output).strip()
+    return executable_sql
+
+# 4. Interactive User Controls Split
+col1, col2 = st.columns([1, 1])
+
+with col1:
+    st.subheader("Autonomous Execution Input")
+    user_query = st.text_input("Ask anything regarding the metrics layout above:", placeholder="Which region has the lowest rainfall?")
+    launch_pipeline = st.button("Kickoff Multi-Agent Crew", type="primary")
+
+with col2:
+    st.subheader("Agent Execution Analytics")
+    if launch_pipeline:
+        if not user_query.strip():
+            st.warning("Please type an input query parameter.")
+        else:
+            with st.spinner("Crew Agents are actively negotiating pipeline tasks..."):
+                try:
+                    # Run generative multi-agent workflow process
+                    compiled_query = run_agentic_pipeline(user_query)
+                    
+                    st.markdown("### Approved Agent SQL Output")
+                    st.code(compiled_query, language="sql")
+                    
+                    # Execute on local schema
+                    execution_results = pd.read_sql_query(compiled_query, db_conn)
+                    st.markdown("### Executed Database Output Matrix")
+                    st.dataframe(execution_results, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error(f"Agentic Pipeline Runtime Fault: {str(e)}")
